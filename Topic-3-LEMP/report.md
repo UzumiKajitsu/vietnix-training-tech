@@ -368,7 +368,7 @@ sudo nginx -t
 sudo systemctl reload Nginx
 ```
 - Truy cập Lavarel bằng doamin laravel.chiennguyen.vietnix.tech
-![alt text](image-13.png)
+![alt text](/Topic-3-LEMP/image-topic3/image-13.png)
 
 ### 3. Cài đặt SSL cho hai Domain
 - Cài đặt acme.sh (client của ZeroSSL), sau đó reload lại biến môi trường để sử dụng lệnh ngay.
