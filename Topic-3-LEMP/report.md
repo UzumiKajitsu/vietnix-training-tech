@@ -499,5 +499,7 @@ sudo systemctl reload Nginx
     ```
     - Đăng nhập mysql (remote) từ máy client để kiểm tra.
     ![alt text](./image-topic3/image-7.png)
+- Cai dat phpMyAdmin
 
-
+![alt text](./image-topic3/image-21.png)
+![alt text](./image-topic3/image31.png)
