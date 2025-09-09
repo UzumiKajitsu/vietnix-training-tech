@@ -499,7 +499,61 @@ sudo systemctl reload Nginx
     ```
     - Đăng nhập mysql (remote) từ máy client để kiểm tra.
     ![alt text](./image-topic3/image-7.png)
-- Cai dat phpMyAdmin
+    
+### 6. Cài đặt phpMyAdmin
+- Sử dụng lệnh sau để cài đặt:
+    ```bash
+    sudo apt install phpmyadmin
+    ```  
+- Một databases có tên `phpmyadmin` sẽ được tạo sau khi cài đặt hoàn tất. Truy cập mysql để kiểm tra database đó:
+    ![alt text](./image-topic3/image55.png)
+- Cấu hình block site cho phpmyadmin bằng Nginx:
+    ```bash                                    
+    server {
+        listen 80;
+        server_name 103.90.226.77;
 
-![alt text](./image-topic3/image-21.png)
-![alt text](./image-topic3/image31.png)
+        location / {
+            proxy_pass http://127.0.0.1:8090;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /phpmyadmin {
+            alias /usr/share/phpmyadmin/;
+            index index.php index.html index.htm;
+
+            if ($uri ~ /phpmyadmin$) {
+                return 301 $scheme://$host$uri/;
+            }
+
+            location ~ ^/phpmyadmin/(.+\.php)$ {
+                include snippets/fastcgi-php.conf;
+                fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+                fastcgi_param SCRIPT_FILENAME $request_filename;
+            }
+        }
+
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+        }
+
+        location ~ /\.ht {
+            deny all;
+        }
+    }
+    ```
+    - `location /`: cấu hình cho đường dẫn /. Khi cập bằng ip/ sẽ forward qua một default server mặc định ở apache.
+    - `location /phpmyadmin`: cấu hình cho đường dẫn /phpmyadmin. Khi truy cập bằng ip/phpmyadmin sẽ chuyển đến trang login của phpmyadmin.
+    - `alias /usr/share/phpmyadmin/`: Tạo đường dẫn URL ảo tới thư mục thực tế của phpMyAdmin. Giúp truy cập phpMyAdmin qua `/phpmyadmin` mà không cần đặt `phpMyAdmin` trong `DocumentRoot`.
+- Sau khi cấu hình, tạo symlink và restart để áp dụng cấu hình.
+```bash
+    sudo ln -s /etc/nginx/sites-available/phpmyadmin.cònf /etc/nginx/sites-enabled/
+    sudo systemctl restart nginx
+```
+- Truy cập vào phpmyadmin bằng trình duyệt
+    ![alt text](./image-topic3/image100.png)
+    ![alt text](./image-topic3/image200.png)
