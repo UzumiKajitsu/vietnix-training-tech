@@ -30,15 +30,29 @@ sudo systemctl status apache2
 ![alt text](./image-topic4/image.png)
 
 ## Xây dựng website với hệ thống Reverse Proxy
-Cấu hình `/etc/apache2/ports.conf` để APache chỉ lắng nghe các port của các website cấu hình trong vhost:
-```bash
-Listen 8080 # port của Wordpress
-Listen 8081 # port của Laravel
-Listen 8090 # port của Default vhost (dùng cho câu sau)
-```
+- Cấu hình `/etc/apache2/ports.conf` để APache chỉ lắng nghe các port của các website cấu hình trong vhost:
+    ```bash
+    Listen 8080 # port của Wordpress
+    Listen 8081 # port của Laravel
+    Listen 8090 # port của Default vhost (dùng cho câu sau)
+    Listen 8443 # port SSL của Wordpress
+    Listen 8444 # port SSL của Laravel
+    Listen 8493 # port SSL của Default host
+    ```
+- Cấu hình SSL chung cho tất cả các vhost Apache Backend. Vì Nginx sẽ forward nội bộ qua Apache (localhost) nên ta sử dụng SSL tự ký để dễ quản lý. 
+    ```bash
+    openssl req -x509 -nodes -days 365 \
+    -newkey rsa:2048 \
+    -keyout /etc/apache2/ssl/defaultapache.key \
+    -out /etc/apache2/ssl/defaultkey.crt \
+    -subj "/CN=default.local" \
+    -addext "subjectAltName=DNS:default.local,IP:127.0.0.1"
+    ```
+    - `CN = default.local`: hostname mà certificate đại diện. Khi Nginx proxy truy cập default.local, sẽ khớp với CN để verify SSL. Hostname này được cấu hình để phân giải sang IP `127.0.0.1` trong `/etc/hosts/` để Nginx hoặc hệ thống biết rằng `default.local` trỏ tới `localhost`, đảm bảo kết nối end-to-end SSL nội bộ giữa Nginx và Apache hoạt động mà không gặp lỗi hostname mismatch.
+    - `-addext "subjectAltName=DNS:default.local,IP:127.0.0.1"`: thêm Subject Alternative Name (SAN) vào certificate. Cho phép cert hợp lệ khi truy cập khi truy cập vào ip hoặc hostname cấu hình.
 ### WordPress
 #### Cấu hình Apache
-- Tạo Virtual Host chứa website Wordpress tại thư mục `/etc/apache2/sites-available/wordpress.conf` 
+- Tạo 2 Virtual Host chứa website Wordpress tại thư mục `/etc/apache2/sites-available/wordpress.conf`cho hai kết nối HTTP và HTTPS:
     ```bash
     <VirtualHost 127.0.0.1:8080>
         ServerName wp.chiennguyen.vietnix.tech
@@ -49,19 +63,38 @@ Listen 8090 # port của Default vhost (dùng cho câu sau)
         </Directory>
     </VirtualHost>
     ```
+
+    ```bash
+    <VirtualHost 127.0.0.1:8443>
+        ServerName wp.chiennguyen.vietnix.tech
+        DocumentRoot /var/www/wordpress
+
+        SSLEngine on
+        SSLCertificateFile /etc/apache2/ssl/defaultkey.crt
+        SSLCertificateKeyFile /etc/apache2/ssl/defaultapache.key
+
+        <Directory /var/www/wordpress>
+            AllowOverride All
+            Require all granted
+        </Directory>
+    </VirtualHost>
+    ```
+
     - `VirtualHost`: Máy chủ ảo lắng nghe dựa trên địa chỉ IP và port được cấu hình. Ở đây IP được cấu hình là `127.0.0.1` (localhost) để  Apache chỉ nhận request từ chính máy chủ, nghĩa là chỉ có Nginx hoặc các ứng dụng nội bộ mới có thể truy cập giúp tăng bảo mật và phù hợp với mô hình reverse proxy. Nginx sẽ nhận request từ client và chuyển tiếp tới Apache trên localhost.
     - `ServerName`: Khai báo tên miền hoặc IP để Apache nhận diện (website này sẽ phục vụ khi người dùng truy cập domain/IP này).
     - `DocumentRoot`: Thư mục gốc chứa mã nguồn website WordPress.
     - `<Directory>` Quy định quyền và cách xử lý cho thư mục:
         - `AllowOverride All`: Cho phép sử dụng file `.htaccess` để ghi đè cấu hình.
         - `Require all granted`: Cho phép truy cập vào tất cả thư mục.
+    - `SSLEngine`: Bật SSL
+    - `SSLCertificateFile` và `SSLCertificateKeyFile`: đường dẫn tới file chứng chỉ công khai (.crt) của site và private key tương ứng (.key).
 - Sau khi cấu hình, kích hoạt vhost và kiểm tra syntax, sau đó khởi động lại apache2
     ```bash
         sudo a2ensite wordpress.conf
         sudo apache2ctl configtest
         sudo systemctl reload apache2
     ```
-- Cấu hình `.htaccess` trong `/var/www/wordpresss/`. `.htaccess` dùng để cấu hình Apache tại thư mục web mà không cần sửa file chính, chủ yếu để URL thân thiện và hỗ trợ HTTPS qua reverse proxy.
+- Cấu hình `.htaccess` trong `/var/www/wordpresss/`. `.htaccess` dùng để cấu hình Apache tại thư mục web mà không cần sửa file chính, ở đây sử dụng `mod_rewrite`, chủ yếu để URL thân thiện và hỗ trợ HTTPS qua reverse proxy.
     ```bash
     # BEGIN WordPress
     <IfModule mod_rewrite.c>
@@ -76,14 +109,14 @@ Listen 8090 # port của Default vhost (dùng cho câu sau)
     SetEnvIf X-Forwarded-Proto "https" HTTPS=on
     # END WordPress
     ```
-- `<IfModule>:` Chỉ chạy các rule rewrite nếu module mod_rewrite bật.
-- `RewriteEngine On`: Bật rewrite.
-- `RewriteRule .*`: Giữ header Authorization.
-- `RewriteBase /`:Thư mục gốc cho rewrite.
-- `RewriteRule ^index\.php$ - [L]`: Không rewrite index.php.
-- `RewriteCond %{REQUEST_FILENAME} !-f và !-d`: Điều kiện file/thư mục không tồn tại.
-- `RewriteRule . /index.php [L]`:Gửi tất cả request về index.php.
-- `SetEnvIf X-Forwarded-Proto "https" HTTPS=on`: Khi dùng Nginx reverse proxy, báo cho Apache biết site đang dùng HTTPS.
+    - `<IfModule>:` Chỉ chạy các rule rewrite nếu module mod_rewrite bật.
+    - `RewriteEngine On`: Bật rewrite.
+    - `RewriteRule .*`: Giữ header Authorization.
+    - `RewriteBase /`:Thư mục gốc cho rewrite.
+    - `RewriteRule ^index\.php$ - [L]`: Không rewrite index.php.
+    - `RewriteCond %{REQUEST_FILENAME} !-f và !-d`: Điều kiện file/thư mục không tồn tại.
+    - `RewriteRule . /index.php [L]`:Gửi tất cả request về index.php.
+    - `SetEnvIf X-Forwarded-Proto "https" HTTPS=on`: Khi dùng Nginx reverse proxy, báo cho Apache biết site đang dùng HTTPS.
 
 #### Cấu hình Nginx
 - Cấu hình Nginx làm reverse proxy cho website WordPress chạy trên Apache backend. cấu hình 2 block server qua file `/etc/nginx/sites-available/wp.chiennguyen.vietnix.tech` riêng biệt cho truy cập HTTP và HTTPS theo yêu cầu đề bài (Không cấu hình redirect từ HTTP -> HTTPS).
@@ -100,6 +133,7 @@ Listen 8090 # port của Default vhost (dùng cho câu sau)
                 proxy_set_header X-Forwarded-Proto $scheme;
             }
         }
+
     ```
     - `listen 80`: lắng nghe HTTP.
     - `server_name`: Domain của website.
@@ -115,23 +149,30 @@ Listen 8090 # port của Default vhost (dùng cho câu sau)
 
         ssl_certificate     /etc/nginx/ssl/wp.crt;
         ssl_certificate_key /etc/nginx/ssl/wp.key;
-    
+
         add_header Content-Security-Policy "upgrade-insecure-requests" always;
 
         location / {
-            proxy_pass http://127.0.0.1:8080;  # Apache backend vẫn HTTP
+            proxy_pass https://default.local:8443;  # Apache backend sử dụng HTTPS
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_redirect off;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/apache2/ssl/defaultkey.crt;
+            proxy_ssl_verify_depth 1;
         }
     }
     ```
     - `listen 443 ssl`: lắng nghe HTTPS.
-    - `ssl_certificate` và `ssl_certificate_key:`: đường dẫn tới file chứng chỉ công khai (.crt) của site và private key tương ứng (.key).
+    - `https://default.local:8443`: gửi tất cả request tới Apache Backend tại default.local:8443. 
+    - `ssl_certificate` và `ssl_certificate_key:`: đường dẫn tới file chứng chỉ công khai (.crt) của site và private key tương ứng (.key). Khi client đăng nhập vào nginx sẽ xác thực bằng SSL này.
     - `add_header Content-Security-Policy - "upgrade-insecure-requests"`: chỉ thị trình duyệt tự động nâng request HTTP sang HTTPS, tránh mixed content (một số file tải bằng HTTP trên site HTTPS làm lỗi hiển thị).
-    - `proxy_redirect off`: Nginx không tự động sửa URL trong header Location mà để WordPress quyết định redirect đúng theo cấu hình của nó. Tránh các lỗi liên  quan đến redirect khi dùng Nginx làm reverse proxy.
+    - `proxy_set_header`: Giữ thông tin gốc của client bao gồm hostname, ip, protocol khi request đi qua proxy.  Giúp backend biết request từ client là gì, tránh mất thông tin khi proxy chuyển tiếp.
+    - `proxy_ssl_verify on`: Bắt buộc Nginx xác thực SSL Apache trước khi forward request từ client.
+    - `proxy_ssl_trusted_certificate`: đường đẫn tới file được Nginx dùng để  xác thực Apache Backend. Do chứng chỉ SSL của Apache là self-signed, Nginx cần file này để tin tưởng SSL.
+    - `proxy_ssl_verify_depth 1`: giới hạn xác thực SSL ở mức 1, chỉ xác thực chứng chỉ, không xác thực CA.
+
 - Sau khi cấu hình, kiểm tra và restart lại Nginx để áp dụng.
     ```bash
     sudo nginx -t
@@ -162,6 +203,22 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
     <VirtualHost 127.0.0.1:8081>
         ServerName laravel.chiennguyen.vietnix.tech
         DocumentRoot /var/www/laravel/public
+        <Directory /var/www/laravel/public>
+            AllowOverride All
+            Require all granted
+        </Directory>
+    </VirtualHost>
+    ```
+
+    ```bash
+    <VirtualHost 127.0.0.1:8444>
+        ServerName laravel.chiennguyen.vietnix.tech
+        DocumentRoot /var/www/laravel/public
+
+        SSLEngine on
+        SSLCertificateFile /etc/apache2/ssl/defaultkey.crt
+        SSLCertificateKeyFile /etc/apache2/ssl/defaultapache.key
+
         <Directory /var/www/laravel/public>
             AllowOverride All
             Require all granted
@@ -204,11 +261,14 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
         add_header X-Content-Type-Options "nosniff";
 
         location / {
-            proxy_pass http://127.0.0.1:8081;
+            proxy_pass https://default.local:8444;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/apache2/ssl/defaultkey.crt;
+            proxy_ssl_verify_depth 1;
         }
     }
     ```
@@ -243,6 +303,21 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
 
         ErrorLog ${APACHE_LOG_DIR}/default-error.log
         CustomLog ${APACHE_LOG_DIR}/default-access.log combined
+    </VirtualHost>
+    ```
+    ```bash
+     <VirtualHost 127.0.0.1:8493>
+        ServerName _default_
+        DocumentRoot /var/www/test
+        SSLEngine on
+        SSLCertificateFile /etc/apache2/ssl/defaultkey.crt
+        SSLCertificateKeyFile /etc/apache2/ssl/defaultapache.key
+
+        <Directory /var/www/laravel/test>
+            AllowOverride All
+            Require all granted
+        DirectoryIndex test.html
+        </Directory>
     </VirtualHost>
     ```
     - `<VirtualHost 127.0.0.1:8090>`: Cấu hình máy chủ ảo Apache lắng nghe trên IP 127.0.0.1 và port 8090.
@@ -293,11 +368,14 @@ sudo unlink /etc/nginx/sites-enabled/default
         ssl_certificate_key /etc/nginx/ssl/nginx.key;
 
         location / {
-            proxy_pass http://127.0.0.1:8090;
+            proxy_pass https://default.local:8493;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/apache2/ssl/defaultkey.crt;
+            proxy_ssl_verify_depth 1;
         }
     }
     ```
