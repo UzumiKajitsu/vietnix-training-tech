@@ -1,5 +1,5 @@
 # NGUYỄN MINH CHIẾN - Nội dung 09/09/2025
-## Reverse Proxy
+## I. Reverse Proxy
 ### Khái niệm
 - Reverse Proxy là một hệ thống được đặt trước các nhóm Server, đóng vai trò như người trung gian để phục vụ việc giao tiếp giữa Client và Web Server. Cụ thể, Reverse Proxy sẽ chặn yêu cầu từ Client (như trình duyệt Web), sau đó giao tiếp với Web Server thay cho Client đó.
 
@@ -29,7 +29,7 @@ sudo systemctl status apache2
 ![alt text](./image-topic4/image-3.png)
 ![alt text](./image-topic4/image.png)
 
-## Xây dựng website với hệ thống Reverse Proxy
+## II. Xây dựng website với hệ thống Reverse Proxy Đối 
 - Cấu hình `/etc/apache2/ports.conf` để APache chỉ lắng nghe các port của các website cấu hình trong vhost:
     ```bash
     Listen 8080 # port của Wordpress
@@ -50,8 +50,12 @@ sudo systemctl status apache2
     ```
     - `CN = default.local`: hostname mà certificate đại diện. Khi Nginx proxy truy cập default.local, sẽ khớp với CN để verify SSL. Hostname này được cấu hình để phân giải sang IP `127.0.0.1` trong `/etc/hosts/` để Nginx hoặc hệ thống biết rằng `default.local` trỏ tới `localhost`, đảm bảo kết nối end-to-end SSL nội bộ giữa Nginx và Apache hoạt động mà không gặp lỗi hostname mismatch.
     - `-addext "subjectAltName=DNS:default.local,IP:127.0.0.1"`: thêm Subject Alternative Name (SAN) vào certificate. Cho phép cert hợp lệ khi truy cập khi truy cập vào ip hoặc hostname cấu hình.
-### WordPress
-#### Cấu hình Apache
+### Trường hợp 1: Nginx proxy hết tất cả request từ client để Apache backend xử lí
+Trong trường hợp này, mọi yêu cầu từ client, bao gồm cả file tĩnh (ảnh, CSS, JavaScript…) và file động (PHP), đều được Nginx chuyển tiếp (proxy) đến Apache để xử lý. Nginx ở đây đóng vai trò reverse proxy, chỉ nhận request từ client và chuyển tiếp, sau đó trả kết quả từ Apache về client mà không xử lý nội dung trực tiếp. Apache sẽ chịu trách nhiệm xử lý toàn bộ các yêu cầu: đọc file tĩnh, thực thi PHP, truy vấn cơ sở dữ liệu và tạo ra HTML hoặc các nội dung khác.
+
+Cách triển khai này đơn giản nhưng không tận dụng được khả năng phục vụ file tĩnh nhanh của Nginx, do đó hiệu suất tổng thể sẽ thấp.
+#### WordPress
+##### Cấu hình Apache
 - Tạo 2 Virtual Host chứa website Wordpress tại thư mục `/etc/apache2/sites-available/wordpress.conf`cho hai kết nối HTTP và HTTPS:
     ```bash
     <VirtualHost 127.0.0.1:8080>
@@ -118,7 +122,7 @@ sudo systemctl status apache2
     - `RewriteRule . /index.php [L]`:Gửi tất cả request về index.php.
     - `SetEnvIf X-Forwarded-Proto "https" HTTPS=on`: Khi dùng Nginx reverse proxy, báo cho Apache biết site đang dùng HTTPS.
 
-#### Cấu hình Nginx
+##### Cấu hình Nginx
 - Cấu hình Nginx làm reverse proxy cho website WordPress chạy trên Apache backend. cấu hình 2 block server qua file `/etc/nginx/sites-available/wp.chiennguyen.vietnix.tech` riêng biệt cho truy cập HTTP và HTTPS theo yêu cầu đề bài (Không cấu hình redirect từ HTTP -> HTTPS).
     ```bash
         server {
@@ -178,7 +182,7 @@ sudo systemctl status apache2
     sudo nginx -t
     sudo systemctl restart nginx
     ```
-#### Kiểm thử website wordpress.
+##### Kiểm thử website wordpress.
 - Truy cập web qua HTTP:
     ![alt text](./image-topic4/image-7.png)
 
@@ -195,9 +199,9 @@ sudo systemctl status apache2
     - Nginx đang chạy và nhận request từ trình duyệt.
     - Nginx cố gắng gửi request tới backend (Apache) nhưng không kết nối được. Vì Apache đang dừng, nên Nginx trả lỗi 502 Bad Gateway.
     - Điều này chứng tỏ Nginx đang nhận request nhưng không thể forward tới Apache, nghĩa là proxy_pass đang hoạt động.
-### Laravel
+#### Laravel
 Cấu hình website Laravel về căn bản cũng tương tự như cấu hình WordPress.
-#### Cấu hình Apache
+##### Cấu hình Apache
 - Tạo Virtual Host chứa website Laravel tại thư mục `/etc/apache2/sites-available/laravel.conf`
     ```bash
     <VirtualHost 127.0.0.1:8081>
@@ -231,7 +235,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
         sudo apache2ctl configtest
         sudo systemctl reload apache2
     ```
-#### Cấu hình Nginx
+##### Cấu hình Nginx
 - Cấu hình Nginx làm reverse proxy cho website Laravel chạy trên Apache backend. cấu hình 2 block server qua file `/etc/nginx/sites-available/laravel.chiennguyen.vietnix.tech` riêng biệt cho truy cập HTTP và HTTPS theo yêu cầu đề bài (Không cấu hình redirect từ HTTP -> HTTPS).
     ```bash
     server {
@@ -277,7 +281,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
     sudo nginx -t
     sudo systemctl restart nginx
     ```
-#### Kiểm thử website Laravel.
+##### Kiểm thử website Laravel.
 - Truy cập web qua HTTP:
 ![alt text](./image-topic4/image-12.png)
 - Truy cập web qua HTTPS:
@@ -287,7 +291,65 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
     sudo systemctl stop apache2
     ```
     ![alt text](./image-topic4/image-9.png)
-## Xây dựng Default vhost cho mọi domain và IP còn lại
+
+### Trường hợp 2: Nginx xử  lí các yêu cầu nội dung tĩnh (.img,.css,.js,...) còn Apache cấu hình xử lí các yêu cầu nội dung động (.php).
+Trong trường hợp này, Nginx sẽ đảm nhận vai trò xử lý tất cả các yêu cầu đến file tĩnh như hình ảnh (.jpg, .png, .gif), CSS (.css), JavaScript (.js) và các định dạng font hoặc video. Điều này giúp giảm tải cho backend, vì các file tĩnh có thể được Nginx trả trực tiếp mà không cần gọi Apache.
+
+Ngược lại, Apache sẽ được cấu hình để xử lý các yêu cầu file động, chủ yếu là các file PHP. Khi client gửi request tới một file PHP, Nginx sẽ proxy request đó tới Apache, nơi PHP sẽ được thực thi, database được truy vấn và kết quả HTML động được trả về.
+
+#### Cấu hình Nginx ví dụ cho Wordpress (đối với Laravel cũng tương tự)
+- Tại thư mục `/etc/nginx/sites-available/wp.chiennguyen.vietnix.tech` thêm cấu hình sau. (dưới đây là cấu hình cho vhost HTTPS, đối với vhost HTTP cấu hình tương tự):
+    ```bash
+    server {
+        listen 443 ssl;
+        server_name wp.chiennguyen.vietnix.tech;
+
+        ssl_certificate     /etc/nginx/ssl/wp.crt;
+        ssl_certificate_key /etc/nginx/ssl/wp.key;
+
+        add_header Content-Security-Policy "upgrade-insecure-requests" always;
+
+        ## đoạn cần thêm
+        root /var/www/wordpress;
+
+        location ~* \.(jpg|jpeg|png|gif|css|js|ico|woff|woff2|ttf|svg|eot|mp4|webp)$ {
+            try_files $uri =404;
+            access_log off;
+            expires max;
+        }
+        ## đoạn cần thêm
+    
+        location / {
+            proxy_pass https://default.local:8443; 
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/apache2/ssl/defaultkey.crt;
+            proxy_ssl_verify_depth 1;
+            proxy_pass_header Server; ## Dòng cần thêm
+        }
+    }
+
+    ```
+    giải thích:
+    - `root /var/www/wordpress`: Cấu hình chỉ thư mục để Nginx lấy file tĩnh
+    - `location ~* \.`: Cấu hình danh sách các loại file tĩnh mà nginx xử lí. Tất cả các request kết thúc bằng các đuôi file tĩnh này, bất kể viết hoa hay thường, sẽ được xử lý trong block của Nginx, không forward sang cho Apache.
+    - `try_files $uri =404`: Nếu các file tĩnh này không tồn tại, lập tức trả về status 404, không forward sang Apache.
+    - `access_log off`: Tắt log truy cập cho các file tĩnh.
+    - `expires max`: Nginx gửi header Expires hoặc Cache-Control cho trình duyệt để file này có thể cache lâu nhất có thể.
+    - `proxy_pass_header Server`: Cho phép Nginx truyền header Server từ backend (Apache) về client khi proxy request. Phục vụ cho việc xác định server xử lí các file là server Apache hay Nginx.
+    
+#### Kiểm thử 
+Truy cập vào Wordpress và Laravel, bật F12 để kiểm tra một số file tài nguyên.
+- File động xử lí bởi Apache.
+![alt text](./image-topic4/image-19.png)
+![alt text](./image-topic4/image-39.png)
+- File tĩnh xử lí bởi Nginx.
+![alt text](./image-topic4/image-29.png)
+![alt text](./image-topic4/image-49.png)
+## III. Xây dựng Default vhost cho mọi domain và IP còn lại
 ### Cấu hình Apache
 - Tạo Virtual Host chứa website default tại thư mục `/etc/apache2/sites-available/default.conf`
     ```bash
