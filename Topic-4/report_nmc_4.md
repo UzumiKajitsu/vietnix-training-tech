@@ -5,11 +5,10 @@
 
 - Trong các giao tiếp Internet tiêu chuẩn, Client sẽ trực tiếp kết nối với Web Server, chúng gửi yêu cầu và chờ đợi kết quả phản hồi trực tiếp từ Web Server. Nhưng với hệ thống có Reverse Proxy, thì Reverse Proxy sẽ tiếp nhận yêu cầu từ Client, sau đó gửi yêu cầu này đến Web Server. Kết quả phản hồi từ Web Server được gửi trả về lại cho Reverse Proxy, sau đó mới được truyền đến Reverse Proxy.
 ### Mô hình Reverse Proxy với Nginx và Apache
-- Khi áp dụng mô hình này với hai máy chủ web là Nginx và Apache, Nginx thường được đặt ở vị trí tiền tuyến, đóng vai trò là Reverse Proxy, trong khi Apache hoạt động như máy chủ backend xử lý các ứng dụng web. Nginx đứng trước Apache bởi nhiều lý do kỹ thuật và vận hành:
-    - Với sử dụng kiến thức đơn luồng, kỹ thuật bất đồng bộ (asynchronous), Nginx đạt được hiệu suất và ổn định cao.
-    - Nginx tiêu tốn rất ít tài nguyên dù phải phục vụ lượng lớn request đồng thời, giúp giảm tải rất nhiều cho Apache.
-    - Nginx có thể thực hiện các chức năng như mã hóa HTTPS cho toàn bộ các miền và chứng chỉ SSL, load balancing, caching, và bảo mật tường lửa ứng dụng cơ bản, đảm bảo các yêu cầu từ client được kiểm soát trước khi đi đến Apache.
-    - Apache phục vụ  xử lý các rewrite rule phức tạp, hỗ trợ .htaccess và tương thích với các ứng dụng như WordPress hay Laravel, được giữ làm máy chủ backend phía sau.
+- Trong mô hình reverse proxy, Nginx đứng trước Apache để nhận tất cả các yêu cầu từ trình duyệt. Nginx đóng vai trò là “cổng vào”, quyết định xem request nào sẽ được phục vụ trực tiếp và request nào cần gửi sang backend Apache.
+- Nginx rất mạnh trong việc xử lý file tĩnh như ảnh, CSS, JavaScript hay font. Khi Nginx đứng trước, các file này được trả trực tiếp mà không cần Apache xử lý, giúp giảm tải cho Apache và cải thiện tốc độ phản hồi.
+- Các request yêu cầu thực thi PHP hoặc logic động sẽ được Nginx proxy sang Apache. Apache chỉ tập trung vào việc xử lý nội dung động, database và tạo HTML, giúp backend hoạt động hiệu quả hơn.
+- Ngoài việc phân chia tĩnh – động, Nginx còn hỗ trợ nén dữ liệu, cache, cân bằng tải và lọc request độc hại trước khi đến Apache. Điều này giúp hệ thống ổn định, bảo mật và dễ mở rộng khi lượng truy cập tăng.
 ### Cài đặt Apache
 - Để cài đặt Apache, sử dụng các lệnh sau:
 ```bash
