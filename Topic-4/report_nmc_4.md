@@ -343,11 +343,17 @@ Ngược lại, Apache sẽ được cấu hình để xử lý các yêu cầu 
 #### Kiểm thử 
 Truy cập vào Wordpress và Laravel, bật F12 để kiểm tra một số file tài nguyên.
 - File động xử lí bởi Apache.
+
 ![alt text](./image-topic4/image-19.png)
+
 ![alt text](./image-topic4/image-39.png)
+
 - File tĩnh xử lí bởi Nginx.
+
 ![alt text](./image-topic4/image-29.png)
+
 ![alt text](./image-topic4/image-49.png)
+
 ## III. Xây dựng Default vhost cho mọi domain và IP còn lại
 ### Cấu hình Apache
 - Tạo Virtual Host chứa website default tại thư mục `/etc/apache2/sites-available/default.conf`
