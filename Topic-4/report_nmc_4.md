@@ -31,12 +31,8 @@ sudo systemctl status apache2
 ## II. Xây dựng website với hệ thống Reverse Proxy Đối 
 - Cấu hình `/etc/apache2/ports.conf` để APache chỉ lắng nghe các port của các website cấu hình trong vhost:
     ```bash
-    Listen 8080 # port của Wordpress
-    Listen 8081 # port của Laravel
-    Listen 8090 # port của Default vhost (dùng cho câu sau)
-    Listen 8443 # port SSL của Wordpress
-    Listen 8444 # port SSL của Laravel
-    Listen 8493 # port SSL của Default host
+    Listen 8080 # port HTTP
+    Listen 8443 # port HTTPS
     ```
 - Cấu hình SSL chung cho tất cả các vhost Apache Backend. Vì Nginx sẽ forward nội bộ qua Apache (localhost) nên ta sử dụng SSL tự ký để dễ quản lý. 
     ```bash
@@ -203,7 +199,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
 ##### Cấu hình Apache
 - Tạo Virtual Host chứa website Laravel tại thư mục `/etc/apache2/sites-available/laravel.conf`
     ```bash
-    <VirtualHost 127.0.0.1:8081>
+    <VirtualHost 127.0.0.1:8080>
         ServerName laravel.chiennguyen.vietnix.tech
         DocumentRoot /var/www/laravel/public
         <Directory /var/www/laravel/public>
@@ -214,7 +210,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
     ```
 
     ```bash
-    <VirtualHost 127.0.0.1:8444>
+    <VirtualHost 127.0.0.1:8443>
         ServerName laravel.chiennguyen.vietnix.tech
         DocumentRoot /var/www/laravel/public
 
@@ -242,7 +238,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
         server_name laravel.chiennguyen.vietnix.tech;
 
         location / {
-            proxy_pass http://127.0.0.1:8081;
+            proxy_pass http://127.0.0.1:8080;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -264,7 +260,7 @@ Cấu hình website Laravel về căn bản cũng tương tự như cấu hình 
         add_header X-Content-Type-Options "nosniff";
 
         location / {
-            proxy_pass https://default.local:8444;
+            proxy_pass https://default.local:8443;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -358,7 +354,7 @@ Truy cập vào Wordpress và Laravel, bật F12 để kiểm tra một số fil
 ### Cấu hình Apache
 - Tạo Virtual Host chứa website default tại thư mục `/etc/apache2/sites-available/default.conf`
     ```bash
-    <VirtualHost 127.0.0.1:8090>
+    <VirtualHost 127.0.0.1:8080>
         ServerName default
         DocumentRoot /var/www/test
 
@@ -373,7 +369,7 @@ Truy cập vào Wordpress và Laravel, bật F12 để kiểm tra một số fil
     </VirtualHost>
     ```
     ```bash
-     <VirtualHost 127.0.0.1:8493>
+     <VirtualHost 127.0.0.1:8443>
         ServerName _default_
         DocumentRoot /var/www/test
         SSLEngine on
@@ -387,7 +383,7 @@ Truy cập vào Wordpress và Laravel, bật F12 để kiểm tra một số fil
         </Directory>
     </VirtualHost>
     ```
-    - `<VirtualHost 127.0.0.1:8090>`: Cấu hình máy chủ ảo Apache lắng nghe trên IP 127.0.0.1 và port 8090.
+    - `<VirtualHost 127.0.0.1:8080>`: Cấu hình máy chủ ảo Apache lắng nghe trên IP 127.0.0.1 và port 8080.
     - `ServerName default`: Đặt tên server là "default" (dùng khi hostname không khớp VirtualHost khác).
     - `DocumentRoot /var/www/test`: Thư mục gốc chứa file web của VirtualHost này.
     - `AllowOverride All`: Cho phép .htaccess ghi đè cấu hình Apache trong thư mục này.
@@ -415,7 +411,7 @@ sudo unlink /etc/nginx/sites-enabled/default
         server_name _;
 
         location / {
-            proxy_pass http://127.0.0.1:8090;
+            proxy_pass http://127.0.0.1:8080;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -435,7 +431,7 @@ sudo unlink /etc/nginx/sites-enabled/default
         ssl_certificate_key /etc/nginx/ssl/nginx.key;
 
         location / {
-            proxy_pass https://default.local:8493;
+            proxy_pass https://default.local:8443;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -461,3 +457,44 @@ sudo unlink /etc/nginx/sites-enabled/default
 - Truy cập website qua HTTP bằng một domain khác đã cấu hình phân giải về địa chỉ IP
 ![alt text](./image-topic4/image-15.png)
     -> Do SSL được cấu hình là SSL tự cấp, không phải SSL chính chủ nên trang web dù truy cập bằng HTTPS sẽ cảnh báo `connection not secure`
+
+## IV. UPLOAD và DEPLOY source-code
+### Laravel
+- Sử dụng ftp truyền source-code từ máy khách lên vps. Sau đó giải nén file upload bằng unzip và lưu vào thư mục /var/www/laravel/laravel_source.
+![alt text](./image-topic4/image00.png)
+![alt text](./image-topic4/image-100.png)
+
+- thiết lập quyền ghi vào laravel storage và bootstrap/cache cho user www-data:
+```bash
+sudo chown -R www-data:www-data /var/www/laravel/laravel_source
+sudo chmod -R 775 /var/www/laravel/laravel_source/storage
+sudo chmod -R 775 /var/www/laravel/laravel_source/bootstrap/cache
+```
+
+- Chỉnh sửa đường dẫn rootdoc của file cấu hình vHost Apache và Nginx thành đường dẫn tới source-code `/var/www/laravel/laravel_source` Sau đó restart lại nginx và Apache để áp dụng cấu hình.
+-  Tạo file .env cho source-code và chỉnh sửa các thông tin để xác định database, user,...
+![alt text](./image-topic4/image-20.png)
+
+- Tạo APP_Key để mã hóa dữ liệu nhạy cảm và chạy Migration để tạo cấu trúc bảng trong database từ code PHP thay vì tạo thủ công bằng SQL.
+    ```bash
+    php artisan key:generate
+    php artisan migrate
+    ```
+- Tạo databases linhlt.db vào import sql (có thể cấu hình bằng giao diện phpmyadmin hoặc mysql-cli, ở đây em sử dụng phpmyadmin)
+![alt text](./image-topic4/image-30.png)
+![alt text](./image-topic4/image-40.png)
+![alt text](./image-topic4/image-50.png)
+- Cấu hình mysql để user được cấu hình trong file .env của source_code có quyền truy cập databases.
+```bash
+GRANT ALL PRIVILEGES ON linhlt_db.* TO 'laravel_user'@'localhost';
+FLUSH PRIVILEGES
+```
+- Truy cập website để kiểm thử
+![alt text](./image-topic4/image-60.png)
+### Wordpress
+- Đối với Wordpress cũng sẽ được cấu hình tương tự như Laravel, tuy nhiên cần lưu ý source-code gốc đang được cấu hình để chạy trên domain cũ là  `linhlt.id.vn`. Vì vậy, nếu  truy cập bằng IP hoặc domain khác (ví dụ trong trường hợp này là `wp.chiennguyen.id.vn`), WordPress sẽ redirect hoặc lỗi URL. Vì vậy cần cấu hình chuyển đổi domain cũ sang domain đang cấu hình trong server_name hiện tại và đồng thời cập nhật URL trong cơ sở dữ liệu. Minh họa các thay thế domain:
+```bash
+UPDATE `Sa3QIZ_yoast_seo_links` SET `url` = REPLACE(`url`, '%linhlt.id.vn%', '%wp.chiennguyen.vietnix.tech%') WHERE `url` LIKE '%%linhlt.id.vn%%' COLLATE utf8mb4_bin
+```
+- Truy cập web sau khi đã cấu hình:
+![alt text](./image-topic4/image-80.png)
