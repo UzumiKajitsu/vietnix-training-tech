@@ -87,7 +87,8 @@ mysqldump -u root -p linhlt_db > wp_chien.sql
 - Truy cập wp-config.php để thay đổi các thông tin phù hợp với thông tin user và database vừa tạo
 ![alt text](./image-topic5/2025-09-13_08-37.png)
 - Tạo file .htaccess trên file cấu hình của Wordpress.
-![alt text](./image-topic5/image-12.png)
+
+    ![alt text](./image-topic5/image-12.png)
 - Gắn SSL cho Wordpress với SSL từ ZeroSSL:
 ![alt text](./image-topic5/2025-09-13_08-49.png)
 #### Laravel
