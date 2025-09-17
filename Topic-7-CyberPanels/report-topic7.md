@@ -99,3 +99,29 @@ sh <(curl https://cyberpanel.net/install.sh || wget - O - https://cyberpanel.net
 - Truy cập vào website để kiểm thử.
 
 ![alt text](./image-topic7/image-25.png)
+
+## III. Passproxy qua OpenLiteSpeed
+- Thiết lập tài khoản admin để đăng nhập OpenLiteSpeed.
+```bash
+sudo /usr/local/lsws/admin/misc/admpass.sh
+```
+- Truy cập trình duyệt ở https://ip:7080 đăng nhập vào OpenLiteSpeed. Sử dụng thông tin tài khoản đã tạo ở bước trước để đăng nhập.
+
+![alt text](./image-topic7/imagex.png)
+![alt text](./image-topic7/imagex-1.png)
+
+- Tạo một proxy mới. Lựa chọn Type là WebServer. Sau đó điền các thông tin và restart lsws để áp dụng cấu hình.
+
+![alt text](./image-topic7/imagex-2.png)
+![alt text](./image-topic7/imagex-3.png)
+![alt text](./image-topic7/imagex-4.png)
+
+- Truy cập vào Virtual Host để tạo context proxy /api. Phần Type để là Proxy. Sau đó điền các thông tin địa chỉ app OpenLiteSpeed sẽ proxy đến.
+
+![alt text](./image-topic7/imagex-5.png)
+![alt text](./image-topic7/imagex-6.png)
+
+- Tạo một app bằng flask lắng nghe trên port 5000 với địa chỉ localhost. Sau đó truy cập vào đường dẫn https://wp.chiennguyen.vietnix.tech/api/ để kiểm thử .
+
+![alt text](./image-topic7/imagex-8.png)
+![alt text](./image-topic7/imagex-7.png)
